@@ -1,42 +1,87 @@
-import random
-from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.shortcuts import redirect,render
+from django.contrib.auth import login,logout,authenticate
+from .forms import *
 from .models import *
-
-def home(request):
-    content = {'categories':Types.objects.all()}
-
-    if request.GET.get('gfg'):
-        return redirect(f"/quiz/?gfg={request.GET.get('gfg')}")
-    return render(request, 'home.html', content)
-
-def quiz(request):
-    context = {'gfg': request.GET.get('gfg')}
-    return render(request, 'quiz.html', context)
-
-def get_quiz(request):
-    try:
-        question_objs = Question.objects.all()
-        if request.GET.get('gfg'):
-            question_objs = Question.objects.filter(gfg__type_name__icontains =request.GET.get('gfg'))
-        question_objs = list(question_objs)
-        data=[]
-        random.shuffle(question_objs)
-
-        for question_obj in question_objs:
-            data.append({
-                "uid" : question_obj.uid,
-                "gfg" : question_obj.gfg.type_name,
-                "question": question_obj.question,
-                "marks": question_obj.marks,
-                "answers": question_obj.get_answers()
-            })
-        payload = {'status': True, 'data': data}
-        return JsonResponse(payload)
-
-    except Exception as e:
-            print(e)
-            return HttpResponse("Something went wrong")
-
-
+from django.http import HttpResponse
+ 
 # Create your views here.
+def home(request):
+    if request.method == 'POST':
+        print(request.POST)
+        questions=QuesModel.objects.all()
+        score=0
+        wrong=0
+        correct=0
+        total=0
+        for q in questions:
+            total+=1
+            print(request.POST.get(q.question))
+            print(q.ans)
+            print()
+            if q.ans ==  request.POST.get(q.question):
+                score+=10
+                correct+=1
+            else:
+                wrong+=1
+        percent = score/(total*10) *100
+        context = {
+            'score':score,
+            'time': request.POST.get('timer'),
+            'correct':correct,
+            'wrong':wrong,
+            'percent':percent,
+            'total':total
+        }
+        return render(request,'Result.html',context)
+    else:
+        questions=QuesModel.objects.all()
+        context = {
+            'questions':questions
+        }
+        return render(request,'Home.html',context)
+ 
+def addQuestion(request):    
+    if request.user.is_staff:
+        form=addQuestionform()
+        if(request.method=='POST'):
+            form=addQuestionform(request.POST)
+            if(form.is_valid()):
+                form.save()
+                return redirect('/')
+        context={'form':form}
+        return render(request,'AddQuestion.html',context)
+    else: 
+        return redirect('home') 
+ 
+def registerPage(request):
+    if request.user.is_authenticated:
+        return redirect('home') 
+    else: 
+        form = createuserform()
+        if request.method=='POST':
+            form = createuserform(request.POST)
+            if form.is_valid() :
+                user=form.save()
+                return redirect('login')
+        context={
+            'form':form,
+        }
+        return render(request,'Register.html',context)
+ 
+def loginPage(request):
+    if request.user.is_authenticated:
+        return redirect('home')
+    else:
+       if request.method=="POST":
+        username=request.POST.get('username')
+        password=request.POST.get('password')
+        user=authenticate(request,username=username,password=password)
+        if user is not None:
+            login(request,user)
+            return redirect('/')
+       context={}
+       return render(request,'Login.html',context)
+ 
+def logoutPage(request):
+    logout(request)
+    return redirect('/')
